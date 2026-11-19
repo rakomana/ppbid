@@ -36,6 +36,10 @@ class Form extends Component
     public function mount(?Listing $listing = null): void
     {
         if (! $listing?->exists) {
+            $this->ends_at = now()
+                ->addHours(config('auction.default_duration_hours'))
+                ->format('Y-m-d\TH:i');
+
             return;
         }
 
@@ -133,7 +137,14 @@ class Form extends Component
                 unset($data['min_price'], $data['quantity']);
             }
 
-            $listing->update($data);
+            $listing->fill($data);
+
+            // A new end time means a new "ending soon" reminder.
+            if ($listing->isDirty('ends_at')) {
+                $listing->ending_soon_notified_at = null;
+            }
+
+            $listing->save();
         });
 
         session()->flash('status', "“{$this->title}” has been updated.");

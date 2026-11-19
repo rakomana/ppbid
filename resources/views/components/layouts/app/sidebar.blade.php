@@ -7,9 +7,13 @@
         <flux:sidebar sticky stashable class="border-e border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
             <flux:sidebar.toggle class="lg:hidden" icon="x-mark" />
 
-            <a href="{{ route('dashboard') }}" class="me-5 flex items-center gap-2 px-1 py-1" wire:navigate aria-label="{{ config('app.name') }} dashboard">
-                <x-app-logo />
-            </a>
+            <div class="flex items-center justify-between gap-2">
+                <a href="{{ route('dashboard') }}" class="flex items-center gap-2 px-1 py-1" wire:navigate aria-label="{{ config('app.name') }} dashboard">
+                    <x-app-logo />
+                </a>
+
+                <livewire:notification-bell :toasts="true" />
+            </div>
 
             @unless (auth()->user()->is_admin)
                 <div class="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm dark:border-orange-400/20 dark:bg-orange-400/10">
@@ -23,6 +27,7 @@
                 <flux:navlist.group heading="Auctions" class="grid">
                     <flux:navlist.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>Dashboard</flux:navlist.item>
                     <flux:navlist.item icon="tag" :href="route('listings.index')" :current="request()->routeIs('listings.*')" wire:navigate>Listings</flux:navlist.item>
+                    <flux:navlist.item icon="bell" :href="route('notifications')" :current="request()->routeIs('notifications')" wire:navigate>Notifications</flux:navlist.item>
                     @unless (auth()->user()->is_admin)
                         <flux:navlist.item icon="banknotes" :href="route('my-bids')" :current="request()->routeIs('my-bids')" wire:navigate>My bids</flux:navlist.item>
                     @endunless
@@ -69,7 +74,14 @@
                     <flux:menu.separator />
 
                     <flux:menu.radio.group>
-                        <flux:menu.item href="/settings/profile" icon="cog" wire:navigate>Settings</flux:menu.item>
+                        @if (\App\Support\Impersonation::isActive())
+                            <form method="POST" action="{{ route('impersonate.stop') }}" class="w-full">
+                                @csrf
+                                <flux:menu.item as="button" type="submit" icon="arrow-uturn-left" class="w-full">Return to admin</flux:menu.item>
+                            </form>
+                        @else
+                            <flux:menu.item href="/settings/profile" icon="cog" wire:navigate>Settings</flux:menu.item>
+                        @endif
                     </flux:menu.radio.group>
 
                     <flux:menu.separator />
@@ -102,6 +114,8 @@
 
             <flux:spacer />
 
+            <livewire:notification-bell align="end" />
+
             <flux:dropdown position="top" align="end">
                 <flux:profile
                     :initials="auth()->user()->initials()"
@@ -131,7 +145,14 @@
                     <flux:menu.separator />
 
                     <flux:menu.radio.group>
-                        <flux:menu.item href="/settings/profile" icon="cog" wire:navigate>Settings</flux:menu.item>
+                        @if (\App\Support\Impersonation::isActive())
+                            <form method="POST" action="{{ route('impersonate.stop') }}" class="w-full">
+                                @csrf
+                                <flux:menu.item as="button" type="submit" icon="arrow-uturn-left" class="w-full">Return to admin</flux:menu.item>
+                            </form>
+                        @else
+                            <flux:menu.item href="/settings/profile" icon="cog" wire:navigate>Settings</flux:menu.item>
+                        @endif
                     </flux:menu.radio.group>
 
                     <flux:menu.separator />
@@ -147,6 +168,8 @@
         </flux:header>
 
         {{ $slot }}
+
+        <x-notification-toasts />
 
         @fluxScripts
     </body>

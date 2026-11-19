@@ -45,7 +45,7 @@
         <flux:input
             wire:model="ends_at"
             label="Expires at"
-            description:trailing="South African time (SAST)."
+            description:trailing="South African time (SAST). New listings default to {{ config('auction.default_duration_hours') }} hours from now."
             type="datetime-local"
             required
         />

@@ -42,6 +42,11 @@
                 @if ($listing->winner_id !== null && $listing->winner_id === auth()->id())
                     <flux:callout variant="success" icon="trophy" heading="You won this auction!">
                         <flux:callout.text>Your bid of {{ Money::format($topBid?->amount) }} wins all {{ $listing->quantity }} {{ Str::plural('item', $listing->quantity) }}.</flux:callout.text>
+                        <x-slot name="actions">
+                            <flux:button size="sm" variant="primary" icon="document-arrow-down" :href="route('listings.invoice', $listing)" data-invoice-link>
+                                Download invoice
+                            </flux:button>
+                        </x-slot>
                     </flux:callout>
                 @endif
 
@@ -58,6 +63,14 @@
                         </div>
                     @else
                         <div class="text-lg font-semibold text-zinc-900 dark:text-white">Closed with no bids</div>
+                    @endif
+
+                    @if ($listing->winner_id && auth()->user()->is_admin)
+                        <div class="mt-2">
+                            <flux:button size="sm" icon="document-arrow-down" :href="route('listings.invoice', $listing)" data-invoice-link>
+                                Invoice {{ \App\Invoices\Invoice::numberFor($listing->id) }}
+                            </flux:button>
+                        </div>
                     @endif
                 </div>
 
@@ -158,6 +171,10 @@
             @elseif (auth()->user()->is_admin)
                 <flux:card class="border-dashed">
                     <flux:text>You can't bid as an admin.</flux:text>
+                </flux:card>
+            @elseif (\App\Support\Impersonation::isActive())
+                <flux:card class="border-dashed" data-impersonation-no-bid>
+                    <flux:text>Bidding is turned off while you're logged in as another user.</flux:text>
                 </flux:card>
             @else
                 <flux:card>

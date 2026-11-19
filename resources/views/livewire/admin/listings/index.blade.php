@@ -61,6 +61,12 @@
                                     Close now
                                 </flux:button>
                             </div>
+                        @elseif ($listing->winner_id)
+                            <div class="flex justify-end">
+                                <flux:button size="sm" icon="document-arrow-down" :href="route('listings.invoice', $listing)" data-invoice-link>
+                                    Invoice
+                                </flux:button>
+                            </div>
                         @endif
                     </flux:table.cell>
                 </flux:table.row>

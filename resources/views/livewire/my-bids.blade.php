@@ -58,6 +58,9 @@
                             @if ($listing->my_status === MyBids::OUTBID)
                                 <flux:button size="xs" :href="route('listings.show', $listing)" wire:navigate>Bid again</flux:button>
                             @endif
+                            @if ($listing->my_status === MyBids::WON)
+                                <flux:button size="xs" icon="document-arrow-down" :href="route('listings.invoice', $listing)" data-invoice-link>Invoice</flux:button>
+                            @endif
                             <flux:badge size="sm" :color="$badgeColor[$listing->my_status]"
                                 :icon="in_array($listing->my_status, [MyBids::WINNING, MyBids::WON]) ? 'trophy' : null">
                                 {{ $listing->my_status }}

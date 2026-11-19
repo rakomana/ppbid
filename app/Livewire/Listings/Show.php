@@ -5,8 +5,10 @@ namespace App\Livewire\Listings;
 use App\Actions\PlaceBid;
 use App\Models\Bid;
 use App\Models\Listing;
+use App\Support\Impersonation;
 use App\Support\Money;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -53,6 +55,10 @@ class Show extends Component
     public function placeBid(PlaceBid $placeBid): void
     {
         $this->successMessage = null;
+
+        if (Impersonation::isActive()) {
+            throw ValidationException::withMessages(['amount' => "Bidding is turned off while you're logged in as another user."]);
+        }
 
         $this->validate();
 

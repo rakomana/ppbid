@@ -8,8 +8,14 @@
     <x-page-header
         :title="$user ? 'Edit user' : 'Add user'"
         :description="$user
-            ? 'Bidder '.$user->bidder_number.' · added '.$user->created_at->format('j M Y')
-            : 'Give the person their email and password so they can log in.'" />
+            ? 'Bidder '.$user->bidder_number.' · added '.$user->created_at->format('j M Y').' · last login '.($user->last_login_at ? $user->last_login_at->format('j M Y H:i') : 'never')
+            : 'Give the person their email and password so they can log in.'">
+        @if ($user)
+            <x-slot:actions>
+                <x-impersonate-button :user="$user" />
+            </x-slot:actions>
+        @endif
+    </x-page-header>
 
     @if ($user?->isDeactivated())
         <flux:callout variant="warning" icon="no-symbol"

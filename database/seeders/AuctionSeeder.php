@@ -6,9 +6,12 @@ use App\Actions\CloseListing;
 use App\Models\Bid;
 use App\Models\Listing;
 use App\Models\User;
+use App\Notifications\Outbid;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Seeder;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Artisan;
 
 /**
  * Fake listings in every state, with realistic bid histories.
@@ -50,6 +53,13 @@ class AuctionSeeder extends Seeder
             $listing = $this->makeListing($title, $description, $minPrice, $quantity, now()->addMinutes($endsInMinutes));
 
             $this->addBids($listing, $bidCount, $final, $mustBid, until: now()->subMinute());
+
+            // Demo notifications: the named bidders who were overtaken see "You've been outbid".
+            if ($top = $listing->highestBid()) {
+                foreach ($mustBid as $user) {
+                    $user->notify(new Outbid($listing, (float) $top->amount));
+                }
+            }
         }
 
         // --- Closed listings -------------------------------------------------
@@ -68,9 +78,17 @@ class AuctionSeeder extends Seeder
 
             $this->addBids($listing, $bidCount, $final, $mustBid, until: $endsAt->copy()->subMinutes(5));
 
-            // Same code path as the scheduled auctions:close command.
+            // Same code path as the scheduled auctions:close command (it also sends the notifications).
             $closeListing->handle($listing);
+
+            // Date those notifications to when the listing actually ended.
+            DatabaseNotification::query()
+                ->where('data->listing_id', $listing->id)
+                ->update(['created_at' => $endsAt, 'updated_at' => $endsAt]);
         }
+
+        // "Ending soon" notifications for listings with an hour or less left.
+        Artisan::call('auctions:notify-ending-soon');
     }
 
     private function makeListing(string $title, ?string $description, float $minPrice, int $quantity, CarbonInterface $endsAt): Listing

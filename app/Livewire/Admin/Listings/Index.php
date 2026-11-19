@@ -24,7 +24,7 @@ class Index extends Component
 
     public function closeNow(int $listingId, CloseListing $closeListing): void
     {
-        $listing = $closeListing->handle(Listing::findOrFail($listingId));
+        $listing = $closeListing->handle(Listing::findOrFail($listingId), auth()->user());
 
         session()->flash('status', "“{$listing->title}” has been closed.");
     }

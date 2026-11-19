@@ -68,6 +68,24 @@ class AdminListingsTest extends TestCase
         $this->actingAs(User::factory()->create())->get('/dashboard')->assertDontSee(route('admin.listings.index'));
     }
 
+    public function test_new_listing_form_defaults_expiry_to_twelve_hours(): void
+    {
+        $this->actingAs($this->admin());
+        $this->travelTo(now()->setTime(9, 30));
+
+        Livewire::test(Form::class)
+            ->assertSet('ends_at', now()->addHours(12)->format('Y-m-d\TH:i'));
+    }
+
+    public function test_default_expiry_length_is_configurable(): void
+    {
+        $this->actingAs($this->admin());
+        config(['auction.default_duration_hours' => 6]);
+
+        Livewire::test(Form::class)
+            ->assertSet('ends_at', now()->addHours(6)->format('Y-m-d\TH:i'));
+    }
+
     public function test_admin_can_create_a_listing(): void
     {
         $this->actingAs($this->admin());

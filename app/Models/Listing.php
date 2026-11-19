@@ -5,6 +5,7 @@ namespace App\Models;
 use Carbon\CarbonInterface;
 use Database\Factories\ListingFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -39,6 +40,7 @@ class Listing extends Model
     {
         return [
             'ends_at' => 'datetime',
+            'ending_soon_notified_at' => 'datetime',
             'min_price' => 'decimal:2',
             'quantity' => 'integer',
         ];
@@ -63,6 +65,19 @@ class Listing extends Model
     public function allBids(): HasMany
     {
         return $this->hasMany(Bid::class);
+    }
+
+    /**
+     * Active (not deactivated) users with a bid that counts on this listing.
+     *
+     * @return Collection<int, User>
+     */
+    public function activeBidders()
+    {
+        return User::query()
+            ->whereIn('id', $this->bids()->select('user_id'))
+            ->whereNull('deactivated_at')
+            ->get();
     }
 
     /**

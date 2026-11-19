@@ -20,7 +20,7 @@ class ListingFactory extends Factory
             'description' => fake()->optional()->paragraph(),
             'min_price' => fake()->randomElement([100, 250, 500, 1000, 2500]),
             'quantity' => fake()->numberBetween(1, 20),
-            'ends_at' => now()->addDay(),
+            'ends_at' => now()->addHours(12),
         ];
     }
 

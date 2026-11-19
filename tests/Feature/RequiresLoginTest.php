@@ -6,9 +6,9 @@ use Illuminate\Routing\Route as RouteDefinition;
 use Illuminate\Support\Facades\Route;
 
 /**
- * Pages a guest may open: logging in and resetting a password only.
+ * Pages a guest may open: logging in only.
  */
-const GUEST_PAGES = ['login', 'forgot-password', 'reset-password/{token}'];
+const GUEST_PAGES = ['login'];
 
 /**
  * Every GET route that renders an app page (skips asset, health and Livewire internals).

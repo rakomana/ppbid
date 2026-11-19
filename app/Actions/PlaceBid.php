@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Models\Bid;
 use App\Models\Listing;
 use App\Models\User;
+use App\Notifications\Outbid;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -22,7 +23,9 @@ class PlaceBid
      */
     public function handle(User $user, Listing $listing, float $amount): Bid
     {
-        return DB::transaction(function () use ($user, $listing, $amount) {
+        $previousLeaderId = null;
+
+        $bid = DB::transaction(function () use ($user, $listing, $amount, &$previousLeaderId) {
             $listing = Listing::query()->lockForUpdate()->findOrFail($listing->id);
 
             if ($user->is_admin) {
@@ -52,11 +55,40 @@ class PlaceBid
                     : 'Your bid must be at least the minimum price of '.Money::format($minimum).'.');
             }
 
+            $previousLeaderId = $highest?->user_id;
+
             return $listing->bids()->create([
                 'user_id' => $user->id,
                 'amount' => round($amount, 2),
             ]);
         });
+
+        // Sent after the bid is saved, so nobody is told about a bid that didn't happen.
+        if ($previousLeaderId) {
+            $this->notifyOutbid($previousLeaderId, $bid);
+        }
+
+        return $bid;
+    }
+
+    /**
+     * Tell the previous leader they've been outbid. Older unread "outbid" notifications
+     * for the same listing are replaced, so a bidding war doesn't flood the bell.
+     */
+    private function notifyOutbid(int $userId, Bid $bid): void
+    {
+        $previousLeader = User::query()->whereNull('deactivated_at')->find($userId);
+
+        if (! $previousLeader) {
+            return;
+        }
+
+        $previousLeader->unreadNotifications()
+            ->where('type', Outbid::class)
+            ->where('data->listing_id', $bid->listing_id)
+            ->delete();
+
+        $previousLeader->notify(new Outbid($bid->listing, (float) $bid->amount));
     }
 
     /**

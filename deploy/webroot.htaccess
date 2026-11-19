@@ -1,0 +1,41 @@
+# ppbid .htaccess for shared hosting where the WHOLE project sits in the web root
+# (public_html). Upload this file to the same folder as index.php and rename it to ".htaccess".
+#
+# If your host already put a block like "# php -- BEGIN cPanel-generated handler" in the
+# existing .htaccess, copy that block to the top of this file so your PHP version is kept.
+
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # --- Block the app's private files and folders -------------------------------
+    # Dotfiles (.env, .git, ...) except .well-known (used for SSL certificates)
+    RewriteRule (^|/)\.(?!well-known/) - [R=404,L]
+    # Laravel's private folders
+    RewriteRule ^(app|bootstrap|config|database|deploy|lang|node_modules|resources|routes|storage|tests|vendor)(/|$) - [R=404,L]
+    # Project files in the root
+    RewriteRule ^(artisan|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|vite\.config\.js|compose\.ya?ml|pint\.json|phpstan\.neon|README\.md|DOCUMENTATION\.md)$ - [R=404,L]
+
+    # --- Laravel ------------------------------------------------------------------
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Redirect Trailing Slashes If Not A Folder...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # Send Requests To Front Controller...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# Serve the app manifest with the right type (for "Install app" on phones)
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+</IfModule>

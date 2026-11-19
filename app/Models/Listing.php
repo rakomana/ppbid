@@ -1,0 +1,149 @@
+<?php
+
+namespace App\Models;
+
+use Carbon\CarbonInterface;
+use Database\Factories\ListingFactory;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Listing extends Model
+{
+    /** @use HasFactory<ListingFactory> */
+    use HasFactory;
+
+    public const STATUS_ACTIVE = 'active';
+
+    public const STATUS_CLOSED = 'closed';
+
+    /**
+     * Fields the admin form may set. Status and winner are managed by the app.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'title',
+        'description',
+        'min_price',
+        'quantity',
+        'ends_at',
+    ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'ends_at' => 'datetime',
+            'min_price' => 'decimal:2',
+            'quantity' => 'integer',
+        ];
+    }
+
+    /**
+     * Bids that count: withdrawn (voided) bids are left out, so every top bid,
+     * leader, minimum next bid and winner is worked out from these.
+     *
+     * @return HasMany<Bid, $this>
+     */
+    public function bids(): HasMany
+    {
+        return $this->hasMany(Bid::class)->whereNull('bids.voided_at');
+    }
+
+    /**
+     * Every bid, including withdrawn ones, for the bid history.
+     *
+     * @return HasMany<Bid, $this>
+     */
+    public function allBids(): HasMany
+    {
+        return $this->hasMany(Bid::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function winner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'winner_id');
+    }
+
+    /**
+     * Listings still taking bids: active and not yet past their end time.
+     *
+     * @param  Builder<Listing>  $query
+     */
+    public function scopeOpen(Builder $query): void
+    {
+        $query->where('status', self::STATUS_ACTIVE)->where('ends_at', '>', now());
+    }
+
+    /**
+     * Adds leader_id: the user id of the highest bid (earliest wins a tie), same order as highestBid().
+     *
+     * @param  Builder<Listing>  $query
+     */
+    public function scopeWithLeaderId(Builder $query): void
+    {
+        $query->addSelect(['leader_id' => Bid::query()
+            ->select('user_id')
+            ->whereColumn('bids.listing_id', 'listings.id')
+            ->whereNull('bids.voided_at')
+            ->orderByDesc('amount')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->limit(1),
+        ]);
+    }
+
+    /**
+     * The highest bid; on a tie, the earliest bid wins.
+     */
+    public function highestBid(): ?Bid
+    {
+        return $this->bids()
+            ->orderByDesc('amount')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->first();
+    }
+
+    public function isOpen(): bool
+    {
+        return $this->status === self::STATUS_ACTIVE && $this->ends_at->isFuture();
+    }
+
+    /**
+     * The lowest amount the next bid may be.
+     */
+    public function minimumNextBid(): float
+    {
+        $highest = $this->highestBid();
+
+        if (! $highest) {
+            return (float) $this->min_price;
+        }
+
+        return round((float) $highest->amount + (float) config('auction.min_increment'), 2);
+    }
+
+    /**
+     * Human-readable time left, e.g. "2 hours 5 minutes left", or "Ended".
+     */
+    public function timeRemaining(): string
+    {
+        if (! $this->ends_at->isFuture()) {
+            return 'Ended';
+        }
+
+        return $this->ends_at->diffForHumans(now(), [
+            'syntax' => CarbonInterface::DIFF_ABSOLUTE,
+            'parts' => 2,
+        ]).' left';
+    }
+}

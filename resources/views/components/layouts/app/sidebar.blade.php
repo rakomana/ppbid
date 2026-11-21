@@ -36,6 +36,7 @@
                 @if (auth()->user()->is_admin)
                     <flux:navlist.group heading="Admin" class="grid">
                         <flux:navlist.item icon="shield-check" :href="route('admin.listings.index')" :current="request()->routeIs('admin.listings.*')" wire:navigate>Manage listings</flux:navlist.item>
+                        <flux:navlist.item icon="arrow-uturn-left" :href="route('admin.returns.index')" :current="request()->routeIs('admin.returns.*')" :badge="($openReturns = \App\Models\ReturnRequest::query()->open()->count()) ?: null" wire:navigate>Returns</flux:navlist.item>
                         <flux:navlist.item icon="users" :href="route('admin.users.index')" :current="request()->routeIs('admin.users.*')" wire:navigate>Users</flux:navlist.item>
                     </flux:navlist.group>
                 @endif

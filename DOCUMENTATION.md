@@ -69,7 +69,7 @@ The seeder also creates 15 listings with bid histories (open, ending soon, close
 | **Dashboard** | Your bidder number, how many auctions you're winning now, and how many you've won. |
 | **Listings** | Open listings (soonest-ending first) and recently closed ones with their winners. |
 | **Listing page** | Details, a live countdown, the current leader, all participants, the bid history, and the bid form. Refreshes every 5 seconds. Shows "You've been outbid" or "You won this auction!" when relevant. |
-| **My bids** | Everything you've bid on, marked **Winning**, **Outbid**, **Won** or **Lost**. Won auctions have an **Invoice** button. |
+| **My bids** | Everything you've bid on, marked **Winning**, **Outbid**, **Won** or **Lost**. Won auctions have an **Invoice** button, and a **Return** button while returns are open. |
 | **Notifications** | Everything the bell has told you (see section 4). |
 | **Settings** | Change your name, email, password or appearance (light/dark). |
 
@@ -83,6 +83,7 @@ The **Admin** section of the sidebar has:
   - Create a listing: title, description (optional), minimum price, quantity and end date/time. The end time is pre-filled to **12 hours from now**; change it if needed. The default length is set by `AUCTION_DEFAULT_DURATION_HOURS` in `.env`.
   - Edit a listing. Once it has bids, the minimum price and quantity are locked.
   - **Close now** ends a listing early and records the current top bidder as the winner.
+- **Returns** (`/admin/returns`): faulty units logged by winners. Open returns are shown first; the sidebar shows how many are open. See **Returns** below.
 - **Users** (`/admin/users`)
   - **Add user:** set their name, email and password (use **Generate** for a random one), and optionally make them an admin. They can log in straight away.
   - **Edit user:** change details or reset the password (leave it blank to keep the current one).
@@ -90,7 +91,21 @@ The **Admin** section of the sidebar has:
   - **Reactivate account:** lets them log in again. Withdrawn bids stay withdrawn, but they can bid again.
   - An admin can't remove their own admin access or deactivate themselves.
   - **Last login:** the Users list shows when each user last logged in ("Never" if they haven't yet), and the edit page shows the exact date and time. "Log in as" by an admin doesn't count as the user logging in.
-  - **Log in as:** see the app exactly as that bidder does, e.g. to check what they see on a listing or in their notifications. An amber banner shows who you're viewing as; click **Return to admin** to go back. While viewing as someone you **can't bid**, change their profile or password, or mark their notifications as read, and the admin area is closed. You can't log in as another admin, a deactivated user or yourself. Each start and stop is recorded in the Laravel log.
+  - **Log in as:** see the app exactly as that bidder does, e.g. to check what they see on a listing or in their notifications. An amber banner shows who you're viewing as; click **Return to admin** to go back. While viewing as someone you **can't bid** or log returns, change their profile or password, or mark their notifications as read, and the admin area is closed. You can't log in as another admin, a deactivated user or yourself. Each start and stop is recorded in the Laravel log.
+
+### Returns
+
+Faulty units are **replaced, not refunded**.
+
+**Buyers.** On the listing page of an auction you won, open **Returns → Log a return** (or **Return** on My bids). Enter how many units are faulty, what's wrong, and any details. You can do this for 7 days after the auction ends (`RETURNS_WINDOW_DAYS`). You can log more than one return per lot, but units already in an open return can't be logged again until it's done. You can cancel a return until an admin has looked at it. You'll get a notification at each step, and once your units are replaced you can download a **replacement note** (PDF).
+
+**Admins.** In **Returns**:
+
+1. **Approve** a requested return, setting how many units you'll replace (you can approve fewer than were logged), with an optional note for the buyer. Or **Reject** it, with a reason the buyer sees.
+2. **Received** when the faulty units are back with you.
+3. **Replaced** when the working units have gone to the buyer. You can skip **Received** if the swap happens over the counter.
+
+If there's no stock of the same module, replace with a similar or better one and say so in the note. The replacement note (`RN-…`) can be downloaded from the Returns page or the listing page.
 
 ### Invoices
 
@@ -179,6 +194,7 @@ Phones only install apps from **HTTPS** sites, so the app must be deployed to a 
 | `app/Support/Impersonation.php`, `app/Http/Controllers/ImpersonationController.php` | "Log in as" for admins: start/stop, the rules for who can be impersonated, and log entries. The admin's id is kept in the session (`impersonator_id`). |
 | `app/Listeners/RecordLastLogin.php` | Saves `users.last_login_at` on each real login (not on "Log in as" switches). |
 | `app/Http/Middleware/BlockWhileImpersonating.php` | Blocks the profile and password settings (and their Livewire actions) while impersonating. |
+| `app/Models/ReturnRequest.php`, `app/Actions/LogReturn.php`, `app/Actions/HandleReturn.php` | Returns: statuses, reasons, the lot cap and return window (`Listing::returnableQuantity()`, `acceptsReturns()`), and the allowed status moves. Buyer UI: `app/Livewire/Listings/Returns.php`; admin page: `app/Livewire/Admin/Returns/Index.php`; replacement note PDF: `app/Http/Controllers/ReplacementNoteController.php` and `resources/views/returns/note-pdf.blade.php`. Settings: `config/returns.php`. |
 | `app/Support/Money.php` | `Money::format()` for `R1,250.00` formatting. |
 | `app/Invoices/Invoice.php`, `app/Http/Controllers/InvoiceController.php` | Invoice number, dates and amount, and the PDF download (winner and admins only). Template: `resources/views/invoices/pdf.blade.php`. Settings: `config/invoice.php`. |
 | `config/auction.php` | `min_increment` (default R10), `default_duration_hours` (default 12) and `ending_soon_minutes` (default 60). |
@@ -192,8 +208,9 @@ Phones only install apps from **HTTPS** sites, so the app must be deployed to a 
 - **bids**: `listing_id`, `user_id`, `amount`, `voided_at` (set when a bid is withdrawn).
 - **notifications**: Laravel's standard in-app notifications table (`data` holds the title, message and listing; `read_at` is empty until read).
 - **listings.ending_soon_notified_at**: when the "ending soon" notification went out, so it's only sent once.
+- **return_requests**: `listing_id`, `user_id` (the buyer), `quantity_requested`, `quantity_approved`, `reason`, `details`, `status` (`requested`/`approved`/`received`/`replaced`/`rejected`/`cancelled`), `admin_note`, `handled_by`, `replaced_at`.
 
-On a live database that's already installed, import `database/dumps/ppbid-notifications-upgrade.sql` once and then `ppbid-last-login-upgrade.sql` once to add these.
+On a live database that's already installed, import `database/dumps/ppbid-notifications-upgrade.sql`, `ppbid-last-login-upgrade.sql` and `ppbid-returns-upgrade.sql` once each, in that order, to add these (or `ppbid-fields-only.sql` once instead of all three).
 
 ### Tests
 
@@ -222,4 +239,6 @@ Tests use Pest and PHPUnit and run against a separate `testing` database, so the
 | Invoice shows "ppbid" or no address or banking details | Fill in the `INVOICE_*` settings in `.env`. On a server with cached config, run `php artisan config:clear` afterwards. |
 | Invoice download gives an error on the server | Upload the whole `vendor/` folder again (it now includes the PDF library), and make sure `storage/` is writable. |
 | No "ending soon" or "you won" notifications | The scheduler isn't running. Set up the cron entry in section 5. |
+| "Log a return" is missing | It's only shown to the winner, inside the return window (`RETURNS_WINDOW_DAYS`, default 7 days after the auction ends), and while some units of the lot aren't already in an open return. |
+| Return pages give a database error on the server | The `return_requests` table is missing. Import `database/dumps/ppbid-returns-upgrade.sql` once. |
 | Port 8000 or 3307 already in use | Change `APP_PORT` or `FORWARD_DB_PORT` in `.env`, then `sail up -d` again. |

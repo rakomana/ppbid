@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Listing extends Model
 {
@@ -78,6 +79,42 @@ class Listing extends Model
             ->whereIn('id', $this->bids()->select('user_id'))
             ->whereNull('deactivated_at')
             ->get();
+    }
+
+    /**
+     * @return HasMany<ReturnRequest, $this>
+     */
+    public function returnRequests(): HasMany
+    {
+        return $this->hasMany(ReturnRequest::class);
+    }
+
+    /**
+     * Units of the lot the winner can still log a return for:
+     * the lot quantity less units already in an open return.
+     */
+    public function returnableQuantity(): int
+    {
+        return max(0, $this->quantity - (int) $this->returnRequests()->open()
+            ->sum(DB::raw('coalesce(quantity_approved, quantity_requested)')));
+    }
+
+    /**
+     * The last moment the winner may log a return.
+     */
+    public function returnDeadline(): CarbonInterface
+    {
+        return $this->ends_at->copy()->addDays(config('returns.window_days'));
+    }
+
+    /**
+     * Closed, won, and still inside the return window.
+     */
+    public function acceptsReturns(): bool
+    {
+        return $this->status === self::STATUS_CLOSED
+            && $this->winner_id !== null
+            && $this->returnDeadline()->isFuture();
     }
 
     /**

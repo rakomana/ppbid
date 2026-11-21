@@ -60,6 +60,9 @@
                             @endif
                             @if ($listing->my_status === MyBids::WON)
                                 <flux:button size="xs" icon="document-arrow-down" :href="route('listings.invoice', $listing)" data-invoice-link>Invoice</flux:button>
+                                @if ($listing->status === \App\Models\Listing::STATUS_CLOSED && $listing->acceptsReturns())
+                                    <flux:button size="xs" icon="arrow-uturn-left" :href="route('listings.show', $listing).'#returns'" data-return-link>Return</flux:button>
+                                @endif
                             @endif
                             <flux:badge size="sm" :color="$badgeColor[$listing->my_status]"
                                 :icon="in_array($listing->my_status, [MyBids::WINNING, MyBids::WON]) ? 'trophy' : null">

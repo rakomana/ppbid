@@ -8,6 +8,10 @@
         'ending_soon' => ['clock', 'bg-amber-100 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400'],
         'won' => ['trophy', 'bg-emerald-100 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-400'],
         'lost' => ['flag', 'bg-zinc-100 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300'],
+        'return_logged', 'return_requested' => ['arrow-uturn-left', 'bg-amber-100 text-amber-600 dark:bg-amber-400/15 dark:text-amber-400'],
+        'return_approved', 'return_received' => ['arrow-path', 'bg-sky-100 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400'],
+        'return_replaced' => ['check-badge', 'bg-emerald-100 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-400'],
+        'return_rejected' => ['x-circle', 'bg-red-100 text-red-600 dark:bg-red-400/15 dark:text-red-400'],
         'closed' => ['check-circle', 'bg-sky-100 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400'],
         default => ['bell', 'bg-zinc-100 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300'],
     };

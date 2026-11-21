@@ -237,6 +237,10 @@
                 </dl>
             </div>
 
+            @if ($listing->status === Listing::STATUS_CLOSED && $listing->winner_id && (auth()->user()->is_admin || $listing->winner_id === auth()->id()))
+                <livewire:listings.returns :listing="$listing" :key="'returns-'.$listing->id" />
+            @endif
+
             <section class="flex flex-col gap-3" data-participants>
                 <flux:heading size="lg" level="2">Participants ({{ $participants->count() }})</flux:heading>
 

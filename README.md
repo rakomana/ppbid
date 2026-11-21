@@ -13,6 +13,7 @@ A simple auction app built with Laravel 12, Livewire, Flux and MySQL. Amounts ar
 - The winner can download a **PDF invoice** for each auction they win.
 - Admins can **log in as** a bidder to see the app exactly as they do (read-only).
 - Admins can see each user's **last login** time on the Users page.
+- Winners can **log a return** for faulty units (e.g. RAM that fails testing). Faulty units are **replaced, never refunded**. Admins handle returns at `/admin/returns`.
 
 ## Local setup (Sail)
 
@@ -93,6 +94,27 @@ When an auction closes with a winner, a PDF invoice is available straight away. 
 
 Code: `app/Invoices/Invoice.php`, `app/Http/Controllers/InvoiceController.php`, `config/invoice.php`.
 
+## Returns (replace faulty units)
+
+Stock is mostly RAM, so some units can be faulty. The winner of an auction can log a return for part of the lot, and an admin replaces those units. **There are no refunds**: the invoice never changes.
+
+- **Logging a return:** on the listing page of an auction they won (the **Returns** section, or **Return** on My bids), the winner enters:
+  - **Faulty units**: how many, up to the units of the lot not already in an open return. Example: a lot of 20 with 3 in an open return leaves 17.
+  - **What's wrong**: Not detected / won't boot, Fails memory test, Wrong spec, Physical damage, or Other.
+  - **Details** (optional): e.g. "2 sticks fail MemTest86 at 2400MHz".
+- **Not while impersonating:** an admin using **Log in as** sees the buyer's returns but can't log or cancel one (the page says so).
+- **Return window:** returns can be logged for `RETURNS_WINDOW_DAYS` days after the auction ends (default 7). Replacing units doesn't restart it.
+- **Return number:** `RET-000045` (from the return's id).
+- **Statuses:** **Requested** → **Approved** (or **Rejected**) → **Received** → **Replaced**. An admin can go from Approved straight to Replaced when units are swapped over the counter. The buyer can **cancel** a return while it's still Requested.
+- **Approving fewer:** the admin can approve fewer units than were logged (e.g. 2 of 3 failed testing here). Rejecting needs a reason. The note is shown to the buyer.
+- **Open returns count against the lot.** Once a return is Replaced, Rejected or Cancelled its units are free again, so a replacement unit that also fails can be logged again (inside the window).
+- **No replacement stock?** Replace with a similar or better module and say so in the note.
+- **Notifications (in-app):** admins get "Return logged"; the buyer gets one at each step (approved, rejected, received, replaced). Clicking an admin's notification opens the Returns page.
+- **Replacement note:** once Replaced, the buyer and admins can download a PDF replacement note `RN-000045` from the listing page or the admin Returns page. It lists the units logged and replaced and refers to the original invoice.
+- **Admin page:** `/admin/returns` (sidebar **Returns**, with a count of open returns). Filter by status (Open by default) and search by listing, buyer or RET number.
+
+Code: `app/Models/ReturnRequest.php`, `app/Actions/LogReturn.php`, `app/Actions/HandleReturn.php`, `app/Livewire/Listings/Returns.php`, `app/Livewire/Admin/Returns/Index.php`, `app/Http/Controllers/ReplacementNoteController.php`, `resources/views/returns/note-pdf.blade.php`, `config/returns.php`. Table: `return_requests`.
+
 ## Closing expired auctions
 
 Listings past their end time stop accepting bids immediately. The `auctions:close` command then marks them closed and records the winner (the highest bid; on a tie, the earliest):
@@ -132,5 +154,7 @@ SQL files in `database/dumps/` (not committed to git) for importing with phpMyAd
 - `ppbid-demo.sql`: a fresh install with the demo users, listings, bids and notifications.
 - `ppbid-notifications-upgrade.sql`: for a live database that's already installed. Import it **once** to add the notifications table and the `listings.ending_soon_notified_at` column. Existing data is kept.
 - `ppbid-last-login-upgrade.sql`: then import this **once** to add `users.last_login_at`. Existing data is kept.
+- `ppbid-returns-upgrade.sql`: then import this **once** to add the `return_requests` table. Existing data is kept.
+- `ppbid-fields-only.sql`: all of the above schema changes in one file (notifications, ending soon, last login, returns). Use it **instead of** the upgrade files, not as well.
 
 Upgrade files must be imported in the order above, and each only once. A fresh install from `ppbid-clean.sql` or `ppbid-demo.sql` already includes everything.

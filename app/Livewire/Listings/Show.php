@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Listings;
 
+use App\Actions\BuyNow;
 use App\Actions\PlaceBid;
 use App\Models\Bid;
 use App\Models\Listing;
@@ -68,6 +69,26 @@ class Show extends Component
         $this->resetAmount();
     }
 
+    /**
+     * @param  string  $price  The Buy Now price shown in the confirmation, so a price changed since isn't charged.
+     */
+    public function buyNow(BuyNow $buyNow, string $price): void
+    {
+        $this->successMessage = null;
+
+        if (Impersonation::isActive()) {
+            throw ValidationException::withMessages(['buyNow' => "Buying is turned off while you're logged in as another user."]);
+        }
+
+        if (! is_numeric($price)) {
+            throw ValidationException::withMessages(['buyNow' => 'Buy Now is no longer available on this listing.']);
+        }
+
+        $buyNow->handle(auth()->user(), $this->listing, (float) $price);
+
+        $this->modal('buy-now')->close();
+    }
+
     private function resetAmount(): void
     {
         $this->amount = $this->suggestedAmount = number_format($this->listing->minimumNextBid(), 2, '.', '');
@@ -100,7 +121,7 @@ class Show extends Component
         $history = $this->listing->allBids()
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->get(['id', 'user_id', 'amount', 'voided_at', 'created_at']);
+            ->get(['id', 'user_id', 'amount', 'is_buy_now', 'voided_at', 'created_at']);
 
         $bids = $history->reject(fn (Bid $bid) => $bid->isVoided())->values();
 
@@ -128,6 +149,8 @@ class Show extends Component
             'isLeader' => $isLeader,
             'isOutbid' => $hasBid && ! $isLeader && $this->listing->isOpen(),
             'isLive' => $this->listing->status === Listing::STATUS_ACTIVE,
+            'buyNowAvailable' => $this->listing->buyNowAvailable(),
+            'boughtNow' => $this->listing->status === Listing::STATUS_CLOSED && (bool) $topBid?->is_buy_now,
         ])->title($this->listing->title);
     }
 }

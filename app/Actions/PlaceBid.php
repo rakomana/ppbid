@@ -51,8 +51,12 @@ class PlaceBid
 
             if ($this->cents($amount) < $this->cents($minimum)) {
                 $this->reject($highest
-                    ? 'Your bid must be at least '.Money::format($minimum).' (the top bid plus '.Money::format(config('auction.min_increment')).').'
+                    ? 'Your bid must be at least '.Money::format($minimum).' (the top bid plus '.Money::format($listing->bidIncrement()).').'
                     : 'Your bid must be at least the minimum price of '.Money::format($minimum).'.');
+            }
+
+            if ($listing->buyNowAvailable() && $this->cents($amount) >= $this->cents((float) $listing->buy_now_price)) {
+                $this->reject('That is at or above the Buy Now price of '.Money::format($listing->buy_now_price).'. Use Buy Now to win it straight away.');
             }
 
             $previousLeaderId = $highest?->user_id;

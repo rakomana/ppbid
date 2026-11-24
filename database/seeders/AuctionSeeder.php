@@ -49,10 +49,33 @@ class AuctionSeeder extends Seeder
             ['Concrete mixer 120L', 'Electric, 550 W. Lightly used.', 3800, 1, 8 * 60, 2, null, []],
         ];
 
+        // Buy Now prices for some open listings, comfortably above where their bidding ends up.
+        $buyNow = [
+            'Steel roof sheets 3m' => 6500,
+            'Cordless drill' => 1200,
+            'Clay stock bricks (pallet of 500)' => 4500,
+            'Concrete mixer 120L' => 5500,
+        ];
+
+        // Bid increments for some open listings; the rest use the default (AUCTION_MIN_INCREMENT).
+        $increments = [
+            'Clay stock bricks (pallet of 500)' => 50,
+            'Ceramic floor tiles 600x600' => 100,
+            'Concrete mixer 120L' => 25,
+        ];
+
         foreach ($open as [$title, $description, $minPrice, $quantity, $endsInMinutes, $bidCount, $final, $mustBid]) {
             $listing = $this->makeListing($title, $description, $minPrice, $quantity, now()->addMinutes($endsInMinutes));
 
+            if (isset($increments[$title])) {
+                $listing->forceFill(['min_increment' => $increments[$title]])->saveQuietly();
+            }
+
             $this->addBids($listing, $bidCount, $final, $mustBid, until: now()->subMinute());
+
+            if (isset($buyNow[$title])) {
+                $listing->forceFill(['buy_now_price' => $buyNow[$title]])->saveQuietly();
+            }
 
             // Demo notifications: the named bidders who were overtaken see "You've been outbid".
             if ($top = $listing->highestBid()) {
@@ -86,6 +109,29 @@ class AuctionSeeder extends Seeder
                 ->where('data->listing_id', $listing->id)
                 ->update(['created_at' => $endsAt, 'updated_at' => $endsAt]);
         }
+
+        // --- Bought with Buy Now -------------------------------------------
+        // Alice ended this one early by paying the Buy Now price after Bob had bid.
+        $endsAt = now()->subHours(6);
+        $listing = $this->makeListing('Tile adhesive 20kg (pallet)', 'Grey tile adhesive, 50 bags.', 1100, 50, $endsAt);
+        $listing->forceFill(['buy_now_price' => 2000])->saveQuietly();
+
+        $this->addBids($listing, 2, null, [$bob], until: $endsAt->copy()->subHours(2));
+
+        Bid::query()->forceCreate([
+            'listing_id' => $listing->id,
+            'user_id' => $alice->id,
+            'amount' => 2000,
+            'is_buy_now' => true,
+            'created_at' => $endsAt,
+            'updated_at' => $endsAt,
+        ]);
+
+        $closeListing->handle($listing);
+
+        DatabaseNotification::query()
+            ->where('data->listing_id', $listing->id)
+            ->update(['created_at' => $endsAt, 'updated_at' => $endsAt]);
 
         // "Ending soon" notifications for listings with an hour or less left.
         Artisan::call('auctions:notify-ending-soon');
@@ -122,7 +168,7 @@ class AuctionSeeder extends Seeder
 
         $bidders = $this->bidderSequence($count, $final, $mustBid);
         $times = $this->spreadTimes($count, $listing->created_at->copy()->addHour(), $until);
-        $increment = (float) config('auction.min_increment');
+        $increment = $listing->bidIncrement();
         $amount = (float) $listing->min_price;
 
         foreach ($bidders as $i => $bidder) {

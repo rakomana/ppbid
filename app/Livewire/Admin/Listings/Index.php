@@ -35,6 +35,7 @@ class Index extends Component
             ->with('winner')
             ->withCount('bids')
             ->withMax('bids', 'amount')
+            ->withExists(['bids as bought_now' => fn ($query) => $query->where('is_buy_now', true)])
             ->orderBy('status')          // active before closed
             ->orderBy('ends_at')
             ->paginate(20);

@@ -30,6 +30,8 @@ class Listing extends Model
         'title',
         'description',
         'min_price',
+        'buy_now_price',
+        'min_increment',
         'quantity',
         'ends_at',
     ];
@@ -43,6 +45,8 @@ class Listing extends Model
             'ends_at' => 'datetime',
             'ending_soon_notified_at' => 'datetime',
             'min_price' => 'decimal:2',
+            'buy_now_price' => 'decimal:2',
+            'min_increment' => 'decimal:2',
             'quantity' => 'integer',
         ];
     }
@@ -171,6 +175,37 @@ class Listing extends Model
     }
 
     /**
+     * Open, has a Buy Now price, and the top bid hasn't reached it yet.
+     */
+    public function buyNowAvailable(): bool
+    {
+        if ($this->buy_now_price === null || ! $this->isOpen()) {
+            return false;
+        }
+
+        $highest = $this->highestBid();
+
+        return ! $highest || (float) $highest->amount < (float) $this->buy_now_price;
+    }
+
+    /**
+     * The winning bid was a Buy Now purchase.
+     */
+    public function wasBoughtNow(): bool
+    {
+        return $this->status === self::STATUS_CLOSED && (bool) $this->highestBid()?->is_buy_now;
+    }
+
+    /**
+     * How much each bid must beat the top bid by: this listing's own increment,
+     * or AUCTION_MIN_INCREMENT when it doesn't set one.
+     */
+    public function bidIncrement(): float
+    {
+        return (float) ($this->min_increment ?? config('auction.min_increment'));
+    }
+
+    /**
      * The lowest amount the next bid may be.
      */
     public function minimumNextBid(): float
@@ -181,7 +216,7 @@ class Listing extends Model
             return (float) $this->min_price;
         }
 
-        return round((float) $highest->amount + (float) config('auction.min_increment'), 2);
+        return round((float) $highest->amount + $this->bidIncrement(), 2);
     }
 
     /**

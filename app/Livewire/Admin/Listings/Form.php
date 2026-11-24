@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin\Listings;
 
 use App\Models\Listing;
+use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
@@ -19,6 +20,16 @@ class Form extends Component
     public string $description = '';
 
     public string $min_price = '';
+
+    /**
+     * Optional: empty means the listing has no Buy Now.
+     */
+    public string $buy_now_price = '';
+
+    /**
+     * Optional: empty means the default increment (AUCTION_MIN_INCREMENT).
+     */
+    public string $min_increment = '';
 
     public string $quantity = '1';
 
@@ -49,12 +60,14 @@ class Form extends Component
         $this->title = $listing->title;
         $this->description = (string) $listing->description;
         $this->min_price = (string) $listing->min_price;
+        $this->buy_now_price = (string) $listing->buy_now_price;
+        $this->min_increment = (string) $listing->min_increment;
         $this->quantity = (string) $listing->quantity;
         $this->ends_at = $listing->ends_at->format('Y-m-d\TH:i');
     }
 
     /**
-     * Once a listing has bids, its price and quantity are locked.
+     * Once a listing has bids, its minimum price, bid increment and quantity are locked.
      */
     #[Computed]
     public function hasBids(): bool
@@ -71,6 +84,8 @@ class Form extends Component
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'min_price' => ['required', 'numeric', 'decimal:0,2', 'min:1', 'max:99999999.99'],
+            'buy_now_price' => ['nullable', 'numeric', 'decimal:0,2', 'gt:min_price', 'max:99999999.99'],
+            'min_increment' => ['nullable', 'numeric', 'decimal:0,2', 'min:1', 'max:99999999.99'],
             'quantity' => ['required', 'integer', 'min:1', 'max:1000000'],
             'ends_at' => ['required', 'date', 'after:now'],
         ];
@@ -83,6 +98,7 @@ class Form extends Component
     {
         return [
             'ends_at.after' => 'The expiry must be in the future.',
+            'buy_now_price.gt' => 'The Buy Now price must be higher than the minimum price.',
         ];
     }
 
@@ -93,6 +109,8 @@ class Form extends Component
     {
         return [
             'min_price' => 'minimum price',
+            'buy_now_price' => 'Buy Now price',
+            'min_increment' => 'bid increment',
             'ends_at' => 'expiry',
         ];
     }
@@ -101,6 +119,8 @@ class Form extends Component
     {
         $data = $this->validate();
         $data['description'] = $data['description'] ?: null;
+        $data['buy_now_price'] = $data['buy_now_price'] === null || $data['buy_now_price'] === '' ? null : $data['buy_now_price'];
+        $data['min_increment'] = $data['min_increment'] === null || $data['min_increment'] === '' ? null : $data['min_increment'];
 
         if (! $this->listing) {
             $listing = Listing::create($data);
@@ -123,18 +143,32 @@ class Form extends Component
             if ($listing->bids()->exists()) {
                 $priceChanged = round((float) $data['min_price'], 2) !== round((float) $listing->min_price, 2);
                 $quantityChanged = (int) $data['quantity'] !== $listing->quantity;
+                // Compared as stored (null = the default), so leaving it empty stays "unchanged".
+                $incrementChanged = ($data['min_increment'] === null ? null : round((float) $data['min_increment'], 2))
+                    !== ($listing->min_increment === null ? null : round((float) $listing->min_increment, 2));
 
-                if ($priceChanged || $quantityChanged) {
+                if ($priceChanged || $quantityChanged || $incrementChanged) {
                     $this->min_price = (string) $listing->min_price;
+                    $this->min_increment = (string) $listing->min_increment;
                     $this->quantity = (string) $listing->quantity;
                     unset($this->hasBids);
 
                     throw ValidationException::withMessages([
-                        'min_price' => 'The minimum price and quantity cannot be changed once a listing has bids.',
+                        'min_price' => 'The minimum price, bid increment and quantity cannot be changed once a listing has bids.',
                     ]);
                 }
 
-                unset($data['min_price'], $data['quantity']);
+                unset($data['min_price'], $data['min_increment'], $data['quantity']);
+
+                // Bids at or above the Buy Now price aren't allowed, so it must stay above the next valid bid.
+                $buyNowChanged = $data['buy_now_price'] !== null
+                    && round((float) $data['buy_now_price'], 2) !== round((float) $listing->buy_now_price, 2);
+
+                if ($buyNowChanged && round((float) $data['buy_now_price'], 2) < $listing->minimumNextBid()) {
+                    throw ValidationException::withMessages([
+                        'buy_now_price' => 'With bids already placed, the Buy Now price must be at least '.Money::format($listing->minimumNextBid()).' (the top bid plus the increment).',
+                    ]);
+                }
             }
 
             $listing->fill($data);

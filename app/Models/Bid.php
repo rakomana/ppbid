@@ -19,6 +19,7 @@ class Bid extends Model
         'listing_id',
         'user_id',
         'amount',
+        'is_buy_now',
     ];
 
     /**
@@ -28,6 +29,7 @@ class Bid extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'is_buy_now' => 'boolean',
             'voided_at' => 'datetime',
         ];
     }

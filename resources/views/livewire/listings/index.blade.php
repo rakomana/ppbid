@@ -36,6 +36,12 @@
                                     Starting at {{ Money::format($listing->min_price) }}
                                 </div>
                             @endif
+
+                            @if ($listing->buy_now_price !== null && ($listing->bids_max_amount === null || (float) $listing->bids_max_amount < (float) $listing->buy_now_price))
+                                <div class="mt-2">
+                                    <flux:badge size="sm" color="sky" icon="bolt" data-buy-now-badge>Buy now {{ Money::format($listing->buy_now_price) }}</flux:badge>
+                                </div>
+                            @endif
                         </div>
 
                         <div class="mt-auto flex items-center justify-between gap-3 border-t border-zinc-100 pt-3 text-sm dark:border-zinc-800">

@@ -121,3 +121,27 @@ it('shows the invoice button to the winner and admins only', function () {
         ->assertDontSee('Download invoice')
         ->assertDontSee(route('listings.invoice', $listing));
 });
+
+it('shows the WhatsApp share button to the winner and admins only', function () {
+    [$listing, $winner, $loser] = wonListing();
+    $filename = 'ppbid-'.Invoice::numberFor($listing->id).'.pdf';
+
+    $this->actingAs($winner)->get(route('listings.show', $listing))
+        ->assertSee('Share invoice')
+        ->assertSee('data-share-invoice', false)
+        ->assertSee($filename);
+    $this->actingAs($winner)->get(route('my-bids'))->assertSee('data-share-invoice', false);
+    $this->actingAs(admin())->get(route('listings.show', $listing))->assertSee('data-share-invoice', false);
+    $this->actingAs(admin())->get(route('admin.listings.index'))->assertSee('data-share-invoice', false);
+
+    $this->actingAs($loser)->get(route('listings.show', $listing))->assertDontSee('data-share-invoice', false);
+    $this->actingAs($loser)->get(route('my-bids'))->assertDontSee('data-share-invoice', false);
+});
+
+it('has no share button on open listings', function () {
+    $listing = Listing::factory()->create(['min_price' => 100, 'ends_at' => now()->addHour()]);
+    placeBid($bidder = bidder(), $listing, 100);
+
+    $this->actingAs($bidder)->get(route('listings.show', $listing))->assertDontSee('data-share-invoice', false);
+    $this->actingAs(admin())->get(route('admin.listings.index'))->assertDontSee('data-share-invoice', false);
+});

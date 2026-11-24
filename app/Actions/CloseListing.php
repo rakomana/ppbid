@@ -25,8 +25,9 @@ class CloseListing
     {
         $justClosed = false;
         $closedEarly = false;
+        $boughtNow = false;
 
-        $listing = DB::transaction(function () use ($listing, &$justClosed, &$closedEarly) {
+        $listing = DB::transaction(function () use ($listing, &$justClosed, &$closedEarly, &$boughtNow) {
             // Lock the row so a bid being placed at the same moment can't slip in.
             $listing = Listing::query()->lockForUpdate()->findOrFail($listing->id);
 
@@ -34,13 +35,17 @@ class CloseListing
                 return $listing;
             }
 
+            $highest = $listing->highestBid();
+            $boughtNow = (bool) $highest?->is_buy_now;
+
             $listing->status = Listing::STATUS_CLOSED;
-            $listing->winner_id = $listing->highestBid()?->user_id;
+            $listing->winner_id = $highest?->user_id;
 
             // When closed early, end it now so the listing shows the real end time.
             if ($listing->ends_at->isFuture()) {
                 $listing->ends_at = now();
-                $closedEarly = true;
+                // A Buy Now purchase ends the auction by design; only an admin closes it "early".
+                $closedEarly = ! $boughtNow;
             }
 
             $listing->save();
@@ -50,7 +55,7 @@ class CloseListing
         });
 
         if ($justClosed) {
-            $this->notify($listing, $closedEarly, $closedBy);
+            $this->notify($listing, $closedEarly, $boughtNow, $closedBy);
         }
 
         return $listing;
@@ -59,15 +64,15 @@ class CloseListing
     /**
      * In-app notifications: the winner, everyone else who bid, and the admins.
      */
-    private function notify(Listing $listing, bool $closedEarly, ?User $closedBy): void
+    private function notify(Listing $listing, bool $closedEarly, bool $boughtNow, ?User $closedBy): void
     {
         $listing->load('winner');
         $amount = $listing->highestBid()?->amount;
 
         foreach ($listing->activeBidders() as $bidder) {
             $bidder->notify($bidder->id === $listing->winner_id
-                ? new AuctionWon($listing, (float) $amount, $closedEarly)
-                : new AuctionLost($listing, (float) $amount, $closedEarly));
+                ? new AuctionWon($listing, (float) $amount, $closedEarly, $boughtNow)
+                : new AuctionLost($listing, (float) $amount, $closedEarly, $boughtNow));
         }
 
         $admins = User::query()
@@ -76,6 +81,6 @@ class CloseListing
             ->when($closedBy, fn ($query) => $query->whereKeyNot($closedBy->id))
             ->get();
 
-        Notification::send($admins, new AuctionClosedForAdmin($listing, $amount === null ? null : (float) $amount, $closedEarly));
+        Notification::send($admins, new AuctionClosedForAdmin($listing, $amount === null ? null : (float) $amount, $closedEarly, $boughtNow));
     }
 }

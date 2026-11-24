@@ -7,7 +7,7 @@ use App\Support\Money;
 
 class AuctionWon extends AuctionNotification
 {
-    public function __construct(Listing $listing, public float $amount, public bool $closedEarly = false)
+    public function __construct(Listing $listing, public float $amount, public bool $closedEarly = false, public bool $boughtNow = false)
     {
         parent::__construct($listing);
     }
@@ -24,6 +24,10 @@ class AuctionWon extends AuctionNotification
 
     protected function message(): string
     {
+        if ($this->boughtNow) {
+            return "You bought “{$this->listing->title}” with Buy Now for ".Money::format($this->amount).'. Your invoice is ready on the listing page.';
+        }
+
         return ($this->closedEarly ? 'An admin closed “'.$this->listing->title.'” early. ' : '')
             ."You won “{$this->listing->title}” for ".Money::format($this->amount).'. Your invoice is ready on the listing page.';
     }

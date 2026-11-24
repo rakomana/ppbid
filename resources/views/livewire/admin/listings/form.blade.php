@@ -16,7 +16,7 @@
 
         @if ($this->hasBids)
             <flux:callout variant="warning" icon="lock-closed"
-                heading="This listing has bids, so the minimum price and quantity are locked." />
+                heading="This listing has bids, so the minimum price, bid increment and quantity are locked." />
         @endif
 
         <div class="grid gap-6 sm:grid-cols-2">
@@ -39,6 +39,29 @@
                 min="1"
                 required
                 :disabled="$this->hasBids"
+            />
+        </div>
+
+        <div class="grid gap-6 sm:grid-cols-2">
+            <flux:input
+                wire:model="min_increment"
+                label="Bid increment (R)"
+                badge="Optional"
+                description:trailing="Each bid must beat the top bid by at least this much. Leave empty for the default of {{ \App\Support\Money::format(config('auction.min_increment')) }}."
+                type="text"
+                inputmode="decimal"
+                placeholder="{{ number_format((float) config('auction.min_increment'), 2, '.', '') }}"
+                :disabled="$this->hasBids"
+            />
+
+            <flux:input
+                wire:model="buy_now_price"
+                label="Buy Now price (R)"
+                badge="Optional"
+                description:trailing="Any bidder can pay this to win the lot straight away and end the auction. Leave empty for no Buy Now. Bids at or above it aren't allowed."
+                type="text"
+                inputmode="decimal"
+                placeholder="0.00"
             />
         </div>
 

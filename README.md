@@ -5,7 +5,8 @@ A simple auction app built with Laravel 12, Livewire, Flux and MySQL. Amounts ar
 - There is no public sign-up and no "forgot password". Admins add users and set or reset their passwords at `/admin/users`.
 - Users log in, browse listings and bid. Other users only ever see bidder numbers (e.g. "Bidder #014").
 - Each listing is sold as one lot: a bid is the price for the full quantity.
-- A bid must be at least the minimum price, and beat the current top bid by at least the increment (R10 by default, `AUCTION_MIN_INCREMENT`).
+- A bid must be at least the minimum price, and beat the current top bid by at least the increment. Admins can set a **bid increment per listing** (e.g. R50 for a pallet of bricks); listings without one use the default, R10 (`AUCTION_MIN_INCREMENT`). The listing page shows the increment, and it's locked once the listing has bids. Bidders can use the **−** / **+** buttons next to the amount (or the ↑ / ↓ keys) to step their bid by the increment instead of typing it; it never goes below the minimum next bid.
+- A listing can have an optional **Buy Now price**. Any bidder can pay it to win the lot straight away, which ends the auction. See [Buy Now](#buy-now).
 - Admins create, edit and close listings at `/admin/listings`. Admins can't bid.
 - New listings expire **12 hours** after they're created by default (the admin can pick another time on the form). Change the default with `AUCTION_DEFAULT_DURATION_HOURS`.
 - Listing pages refresh every 5 seconds.
@@ -32,7 +33,7 @@ The app runs at http://localhost:8000 (MySQL on host port 3307). Seeded accounts
 - `alice@example.com`, `bob@example.com`, `carol@example.com` (bidders)
 - 12 more fake bidders
 
-The seeder also creates 15 fake listings with bid histories: open ones (one ending in 10 minutes, some with no bids yet) and closed ones (with winners, and one with no bids). Alice is set up to be winning, outbid, a winner and a loser, so every status shows on "My bids". Re-seed at any time with:
+The seeder also creates 16 fake listings with bid histories: open ones (one ending in 10 minutes, some with no bids yet, four with a Buy Now price) and closed ones (with winners, one with no bids, and one Alice bought with Buy Now). Alice is set up to be winning, outbid, a winner and a loser, so every status shows on "My bids". Re-seed at any time with:
 
 ```bash
 ./vendor/bin/sail artisan migrate:fresh --seed
@@ -48,9 +49,9 @@ Notifications appear under the **bell** in the sidebar (and in the phone header)
 |---|---|---|
 | You've been outbid | The bidder who was leading | Someone places a higher bid (only the latest unread one per listing is kept) |
 | Auction ending soon | Everyone who bid on the listing | Once, when an hour or less is left (`AUCTION_ENDING_SOON_MINUTES`, default 60) |
-| You won! | The winner | The listing closes |
-| Auction ended / closed early | Every other bidder | The listing closes |
-| Listing closed / closed early | Admins (except the admin who pressed "Close now") | The listing closes, with the winner's name and amount |
+| You won! | The winner | The listing closes, or they buy it with Buy Now |
+| Auction ended / closed early | Every other bidder | The listing closes. After a Buy Now it says who bought it (as a bidder number) and for how much |
+| Listing closed / closed early / bought now | Admins (except the admin who pressed "Close now") | The listing closes, with the winner's name and amount |
 
 - Notifications are stored in the `notifications` table and are **never emailed**. The forgot-password and email-verification pages have been removed, so the app sends no email at all.
 - Bidders only ever see other bidders as bidder numbers; only admin notifications include names.
@@ -81,18 +82,32 @@ Admins can see the app exactly as a bidder sees it, which helps when answering "
 
 Code: `app/Support/Impersonation.php`, `app/Http/Controllers/ImpersonationController.php`, `app/Http/Middleware/BlockWhileImpersonating.php`.
 
+## Buy Now
+
+Admins can give a listing an optional **Buy Now price** on the create/edit form at `/admin/listings`. Leave it empty for no Buy Now.
+
+- It must be higher than the minimum price. Unlike the minimum price, it can be added, changed or removed while bidding is running, but once there are bids it must be at least the top bid plus the increment.
+- While the listing is open, bidders see **Buy now for R…** on the listing page (and a Buy now badge on the listings page). Clicking it asks them to confirm; only then do they win the whole lot, the auction ends straight away and their invoice is ready.
+- Bids at or above the Buy Now price aren't allowed: bidders are told to use Buy Now instead.
+- The current leader can use Buy Now too. Admins, deactivated users and "Log in as" sessions can't.
+- If the admin changes the price while a bidder has the confirmation open, the purchase is refused and the bidder is shown the new price, so nobody pays a price they didn't see.
+- A Buy Now is saved as a bid at the Buy Now price (marked **Buy now** in the bid history), so the winner, invoice, "My bids" and returns work as for any won auction. Other bidders and admins are notified that it was bought with Buy Now.
+
+Code: `app/Actions/BuyNow.php`, `Listing::buyNowAvailable()`, the Buy Now rule in `app/Actions/PlaceBid.php`.
+
 ## Invoices
 
 When an auction closes with a winner, a PDF invoice is available straight away. Nothing extra is stored in the database: the invoice is built from the closed listing each time it's downloaded.
 
 - **Who can download it:** the winner (the **Download invoice** button on the listing page, and **Invoice** on My bids) and admins (on the listing page and in **Manage listings**). Nobody else can.
+- **Share (WhatsApp etc.):** next to each invoice button, the winner and admins get a **Share** button. On a phone it opens the phone's share menu with the invoice PDF attached, so you can pick WhatsApp (or email, etc.) and a chat. There's no WhatsApp integration: it uses the browser's built-in share feature. Where a browser can't share files (most desktop browsers), the PDF is downloaded instead, to attach by hand. The share menu only works over **HTTPS** (or on `localhost`), so test it on the live site or through an HTTPS tunnel, not via a plain `http://` network address.
 - **Invoice number:** comes from the listing, e.g. listing 123 is `INV-000123`. It's also the payment reference.
 - **Amount:** the winning bid, for the whole lot. **No VAT** is charged, so the winning bid is the total due.
 - **Dates:** the invoice date is when the auction ended; payment is due `INVOICE_PAYMENT_TERMS_DAYS` days later (default 7).
 - **Seller details** (company name, address, phone, email, registration number, banking details for EFT, footer note) come from the `INVOICE_*` settings in `.env`; see `.env.example`. Use `|` to split the address over lines, e.g. `INVOICE_COMPANY_ADDRESS="12 Main Road|Germiston|1401"`. The banking box is left out until bank details are set.
 - The PDF is made with [barryvdh/laravel-dompdf](https://github.com/barryvdh/laravel-dompdf) (pure PHP, works on shared hosting). The template is `resources/views/invoices/pdf.blade.php`.
 
-Code: `app/Invoices/Invoice.php`, `app/Http/Controllers/InvoiceController.php`, `config/invoice.php`.
+Code: `app/Invoices/Invoice.php`, `app/Http/Controllers/InvoiceController.php`, `config/invoice.php`. Share button: `resources/views/components/share-invoice.blade.php`.
 
 ## Returns (replace faulty units)
 
@@ -155,6 +170,8 @@ SQL files in `database/dumps/` (not committed to git) for importing with phpMyAd
 - `ppbid-notifications-upgrade.sql`: for a live database that's already installed. Import it **once** to add the notifications table and the `listings.ending_soon_notified_at` column. Existing data is kept.
 - `ppbid-last-login-upgrade.sql`: then import this **once** to add `users.last_login_at`. Existing data is kept.
 - `ppbid-returns-upgrade.sql`: then import this **once** to add the `return_requests` table. Existing data is kept.
-- `ppbid-fields-only.sql`: all of the above schema changes in one file (notifications, ending soon, last login, returns). Use it **instead of** the upgrade files, not as well.
+- `ppbid-buy-now-upgrade.sql`: then import this **once** to add `listings.buy_now_price` and `bids.is_buy_now`. Existing data is kept.
+- `ppbid-bid-increment-upgrade.sql`: then import this **once** to add `listings.min_increment`. Existing data is kept.
+- `ppbid-fields-only.sql`: all of the above schema changes in one file (notifications, ending soon, last login, returns, Buy Now, bid increment). Use it **instead of** the upgrade files, not as well.
 
 Upgrade files must be imported in the order above, and each only once. A fresh install from `ppbid-clean.sql` or `ppbid-demo.sql` already includes everything.

@@ -54,12 +54,13 @@
                             </div>
                         </dl>
 
-                        <div class="ms-auto flex items-center justify-end gap-2 sm:ms-0 sm:w-44">
+                        <div class="ms-auto flex flex-wrap items-center justify-end gap-2 sm:ms-0 sm:w-44">
                             @if ($listing->my_status === MyBids::OUTBID)
                                 <flux:button size="xs" :href="route('listings.show', $listing)" wire:navigate>Bid again</flux:button>
                             @endif
                             @if ($listing->my_status === MyBids::WON)
                                 <flux:button size="xs" icon="document-arrow-down" :href="route('listings.invoice', $listing)" data-invoice-link>Invoice</flux:button>
+                                <x-share-invoice :listing="$listing" size="xs" label="" />
                                 @if ($listing->status === \App\Models\Listing::STATUS_CLOSED && $listing->acceptsReturns())
                                     <flux:button size="xs" icon="arrow-uturn-left" :href="route('listings.show', $listing).'#returns'" data-return-link>Return</flux:button>
                                 @endif
